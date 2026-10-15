@@ -108,6 +108,7 @@ button.act.muted{color:var(--muted)}
 .t input[type=time]{font-family:var(--font-num)}
 .t .act{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0;line-height:1.4em}
 .t .act:disabled{cursor:default}
+.t .acts{display:flex;gap:10px;line-height:1.4em;white-space:nowrap;overflow:hidden}
 .t.locked input{border-bottom:2px solid var(--accent);color:var(--accent)}
 .t.locked.auto input{color:var(--fg);border-bottom:2px solid var(--line-strong)}
 .t.rest .wrap{display:flex;align-items:center;gap:4px;font-size:.8rem;color:var(--muted);height:2.2em}
@@ -176,7 +177,7 @@ label.f{display:flex;flex-direction:column;gap:2px;font-size:.72rem;color:var(--
           <option value="both">兩天完整（天池山莊過夜）</option>
           <option value="blank">空白（自己選起點）</option>
         </select>
-        <span class="fnote">10/16 17:00 前開頁自動載入第一天，之後自動載入第二天</span>
+        <span class="fnote">10/16 22:00 前開頁自動載入第一天，之後自動載入第二天；手動選過或清空後就不再自動換</span>
       </label>
       <label class="f">出發日期
         <input type="date" id="startDate">
@@ -322,12 +323,13 @@ const PRESET_VERSION=3; // 預設行程內容改版時加 1：舊裝置上的預
 function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
 function applyPreset(p){ S.start=p.start; S.startTime=p.startTime; S.rows=JSON.parse(JSON.stringify(p.rows)); S.startDate=p.date||todayStr(); }
 if(!NODES[S.start]){ S.start='雲天宮登山口'; S.rows=[]; }
-// 依日期自動切換預設：2026-10-16 17:00 前＝第一天（09:30 出發），之後＝第二天（03:00 出發）。手動選過預設就不再覆蓋。
-const SWITCH_AT = new Date(2026,9,16,17,0,0).getTime();
+// 依日期自動切換預設：2026-10-16 22:00 前＝第一天（09:30 出發），之後＝第二天（03:00 出發）。
+// 只有「自動套用」的預設才會被自動切換；手動選過預設、清空、或自己排的行程（S.manualPreset=true）一律不碰。
+const SWITCH_AT = new Date(2026,9,16,22,0,0).getTime(); // 第一天預計 18:15 到山莊，切換點放到 22:00 避免人還在路上被換掉
 function expectedPreset(){ return Date.now() < SWITCH_AT ? 'day1' : 'day2'; }
 let autoNote = null;
-(function(){ const k=expectedPreset(); if(S.autoPreset!==k || (PRESETS[S.autoPreset] && S.presetVersion!==PRESET_VERSION)){ applyPreset(PRESETS[k]); S.pace=S.pace||100; S.autoPreset=k; S.presetVersion=PRESET_VERSION;
-  autoNote = k==='day1' ? '已自動載入第一天行程，10/16 17:00 後會改為第二天' : '已自動載入第二天行程（03:00 出發）'; } })();
+(function(){ const k=expectedPreset(); if(!S.manualPreset && (S.autoPreset!==k || S.presetVersion!==PRESET_VERSION)){ applyPreset(PRESETS[k]); S.pace=S.pace||100; S.autoPreset=k; S.presetVersion=PRESET_VERSION;
+  autoNote = k==='day1' ? '已自動載入第一天行程，10/16 22:00 後會改為第二天' : '已自動載入第二天行程（03:00 出發）'; } })();
 function load(){ try{ const j=localStorage.getItem(KEY); return j?JSON.parse(j):null; }catch(e){ return null; } }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
 
@@ -343,10 +345,19 @@ function resolve(str, anchor){ const v=hm(str); if(v==null) return null; let t=d
 // ---------- 已過節點鎖定 ----------
 function nowAbs(){ if(!S.startDate) return null; const [y,m,d]=S.startDate.split('-').map(Number); const base=new Date(y,m-1,d).getTime(); return Math.floor((Date.now()-base)/60000); }
 // 把推估時間已經過去的節點鎖成目前值（標記 auto，與手動校準區分）；回傳鎖定數
+// 使用者手動校準第 i 站的某欄：這一站的該欄改為手動，這一站的另一欄與下游所有「自動鎖」全部解除（推估值不再可信）
+function calibrated(i, k){
+  const row=S.rows[i]; if(!row) return;
+  if(k==='arriveOverride'){ row.autoArr=false; if(row.autoDep){ row.departOverride=null; row.autoDep=false; } }
+  else { row.autoDep=false; }
+  row.noAutoLock=false;
+  for(let j=i+1;j<S.rows.length;j++){ const r2=S.rows[j]; if(r2.autoArr){ r2.arriveOverride=null; r2.autoArr=false; } if(r2.autoDep){ r2.departOverride=null; r2.autoDep=false; } }
+}
 function lockPassed(){
   const now=nowAbs(); if(now==null) return 0;
   const C=compute(); let n=0;
   C.forEach((c,i)=>{ if(i===0) return; const row=c.row;
+    if(row.noAutoLock) return;
     if(c.depart<=now){ if(!row.arriveOverride){ row.arriveOverride=fmt(c.arrive); row.autoArr=true; n++; } if(!row.departOverride){ row.departOverride=fmt(c.depart); row.autoDep=true; n++; } }
     else if(c.arrive<=now && !row.arriveOverride){ row.arriveOverride=fmt(c.arrive); row.autoArr=true; n++; } });
   return n;
@@ -383,7 +394,7 @@ function compute(){
     let arrive = row.arriveOverride ? resolve(row.arriveOverride, prevDepart) : (seg==null? null : prevDepart+seg);
     if(arrive==null) arrive=prevDepart;
     let depart, rest;
-    if(row.departOverride){ depart=resolve(row.departOverride, arrive); rest=depart-arrive; }
+    if(row.departOverride){ depart=resolve(row.departOverride, arrive); rest=Math.max(0,depart-arrive); }
     else { rest=Number(row.rest)||0; depart=arrive+rest; }
     out.push({node:row.node, arrive, depart, rest, seg, mapMin, est, car, src, row,
       arriveLocked:!!row.arriveOverride, departLocked:!!row.departOverride, segLocked:row.segOverride!=null});
@@ -412,7 +423,7 @@ function renderStartSelect(){
 function progress(C){
   const now=nowAbs(); if(now==null) return {phase:'plan'};
   const last=C[C.length-1]; const endT=last.arrive==null?last.depart:last.arrive;
-  if(now < C[0].depart) return {phase:'plan', now};
+  if(now < C[0].depart || C.length<2) return {phase:'plan', now};
   if(C.length>1 && now>=endT) return {phase:'done', now, endT, end:last.node};
   let idx=C.findIndex((c,i)=>i>0 && c.arrive>now); if(idx<0) idx=C.length-1;
   const at=C[idx-1]||C[0];
@@ -429,7 +440,7 @@ function render(){
   const P=progress(C);
   // 每站保底判定：actual＝已校準或已過的到達；否則用預計到達
   C.forEach((c,i)=>{ if(i===0) return; c.deadline=DL[i]; const over=c.arrive-c.deadline;
-    c.late = over>0 ? {min:over, actual:c.arriveLocked} : null; });
+    c.late = over>0 ? {min:over, actual:c.arriveLocked && !c.row.autoArr} : null; });
   const last=C[C.length-1]; const endT=last.arrive==null?last.depart:last.arrive;
 
   // 現況
@@ -485,7 +496,8 @@ function render(){
     const timeCell=(k,label,val,locked,auto)=>{
       const state = locked ? '<em>'+(auto?'已過':'已校準')+'</em>' : '';
       const act = locked
-        ? '<button class="act'+(auto?' muted':'')+'" type="button" data-clear="'+k+'" data-i="'+ri+'">還原推估</button>'
+        ? (auto ? '<span class="acts"><button class="act" type="button" data-now="'+k+'" data-i="'+ri+'">記錄現在</button><button class="act muted" type="button" data-clear="'+k+'" data-i="'+ri+'">還原</button></span>'
+                : '<button class="act" type="button" data-clear="'+k+'" data-i="'+ri+'">還原推估</button>')
         : '<button class="act" type="button" data-now="'+k+'" data-i="'+ri+'">記錄現在</button>';
       return '<div class="t'+(locked?' locked':'')+(auto?' auto':'')+'"><span class="k">'+label+state+'</span><input type="time" data-i="'+ri+'" data-k="'+k+'" value="'+fmt(val)+'">'+act+'</div>';
     };
@@ -517,11 +529,11 @@ function render(){
 
 document.addEventListener('change', ev=>{
   const el=ev.target;
-  if(el.id==='startTime'||el.id==='startTimeInline'){ S.startTime=el.value||'06:00'; return render(); }
+  if(el.id==='startTime'||el.id==='startTimeInline'){ if(el.value) S.startTime=el.value; return render(); }
   if(el.id==='src'){ S.src=el.value; return render(); }
   if(el.id==='pace'){ S.pace=Math.max(50,Math.min(200,Number(el.value)||100)); return render(); }
   if(el.id==='start'){ S.start=el.value; return render(); }
-  if(el.id==='preset'){ const p=PRESETS[el.value]; if(!p) return; applyPreset(p); S.autoPreset=el.value; S.presetVersion=PRESET_VERSION; return render(); }
+  if(el.id==='preset'){ const p=PRESETS[el.value]; if(!p) return; applyPreset(p); S.autoPreset=el.value; S.presetVersion=PRESET_VERSION; S.manualPreset=true; return render(); }
   if(el.id==='guard'){ S.guard=Math.max(100,Math.min(300,Number(el.value)||130)); return render(); }
   if(el.id==='startDate'){ S.startDate=el.value||todayStr(); return render(); }
   if(el.dataset.k!=null){
@@ -529,7 +541,7 @@ document.addEventListener('change', ev=>{
     const k=el.dataset.k; const v=el.value;
     if(k==='rest') row.rest=Math.max(0,Number(v)||0);
     else if(k==='segOverride') row.segOverride = v===''? null : Math.max(0,Number(v)||0);
-    else { row[k] = v||null; if(k==='arriveOverride') row.autoArr=false; if(k==='departOverride') row.autoDep=false; }
+    else { row[k] = v||null; calibrated(Number(el.dataset.i), k); }
     return render();
   }
 });
@@ -538,10 +550,10 @@ document.addEventListener('click', ev=>{
   const b=ev.target.closest('button'); if(!b) return;
   if(b.dataset.add){ S.rows.push(r(b.dataset.add,0)); return render(); }
   if(b.dataset.remove){ S.rows.pop(); return render(); }
-  if(b.dataset.clear){ const row=S.rows[Number(b.dataset.i)]; if(row){ row[b.dataset.clear]=null; if(b.dataset.clear==='arriveOverride') row.autoArr=false; if(b.dataset.clear==='departOverride') row.autoDep=false; } return render(); }
+  if(b.dataset.clear){ const row=S.rows[Number(b.dataset.i)]; if(row){ const k=b.dataset.clear; const wasAuto = k==='arriveOverride'? row.autoArr : row.autoDep; row[k]=null; if(k==='arriveOverride') row.autoArr=false; if(k==='departOverride') row.autoDep=false; if(wasAuto) row.noAutoLock=true; } return render(); }
   if(b.id==='lockBtn'){ const n=lockPassed(); render(); return toast(n? '已鎖定 '+n+' 個已過時間':'沒有已過的節點'); }
-  if(b.dataset.now){ const row=S.rows[Number(b.dataset.i)]; if(row){ row[b.dataset.now]=nowHM(); if(b.dataset.now==='arriveOverride') row.autoArr=false; else row.autoDep=false; } return render(); }
-  if(b.id==='resetBtn'){ S.rows=[]; S.autoPreset=''; return render(); }
+  if(b.dataset.now){ const row=S.rows[Number(b.dataset.i)]; if(row){ row[b.dataset.now]=nowHM(); calibrated(Number(b.dataset.i), b.dataset.now); } return render(); }
+  if(b.id==='resetBtn'){ S.rows=[]; S.autoPreset=''; S.manualPreset=true; return render(); }
   if(b.id==='copyBtn'){ return copyText(); }
 });
 document.addEventListener('submit', ev=>{
@@ -564,7 +576,7 @@ function copyText(){
 }
 let toastT; function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
-const APP_VERSION='2026-10-15 v18';
+const APP_VERSION='2026-10-15 v19';
 try{ $('ver').textContent=APP_VERSION; }catch(e){}
 // 離線快取（只在 http(s) 下註冊；本機檔案與 Artifact 環境會略過）
 try{ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator.serviceWorker.register('./sw.js').catch(()=>{}); }catch(e){}

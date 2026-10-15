@@ -7,7 +7,10 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   e.respondWith(caches.open(CACHE).then(async c => {
     const cached = c.match(e.request, { ignoreSearch: true });
-    const net = fetch(e.request, { cache: 'no-store' }).then(r => { if (r && r.ok) c.put(e.request, r.clone()); return r; }).catch(() => null);
+    // 只有 2xx 才算拿到新版；寫入快取放進 waitUntil，避免 SW 被中止時漏寫
+    const net = fetch(e.request, { cache: 'no-store' })
+      .then(r => { if (r && r.ok) { e.waitUntil(c.put(e.request, r.clone())); return r; } return null; })
+      .catch(() => null);
     const timeout = new Promise(res => setTimeout(() => res(null), 3000));
     const fresh = await Promise.race([net, timeout]);
     return fresh || (await cached) || (await net) || Response.error();
