@@ -299,16 +299,16 @@ function nextOptions(a){ const seen={}; (ADJ[a]||[]).forEach(e=>{ (seen[e.to]=se
 
 const PRESETS = {
   day1:{ start:'雲天宮登山口', startTime:'09:30', date:'2026-10-16', rows:[
-    r('尾上山2532峰',10), r('古道2.8K',0), r('雲海保線所',60), r('5.5K崩壁',0), r('10K崩壁',10), r('12.7K三疊瀑布',10), r('天池山莊',0)
+    r('尾上山2532峰',3), r('古道2.8K',0), r('雲海保線所',20), r('5.5K崩壁',0), r('10K崩壁',3), r('12.7K三疊瀑布',3), r('天池山莊',0)
   ]},
   day2:{ start:'天池山莊', startTime:'03:00', date:'2026-10-17', rows:[
-    r('天池岔路口',5), r('南峰登山口',0), r('奇萊主山南峰',60), r('南峰登山口',0), r('天池岔路口',5),
-    r('南華山',30), r('天池岔路口',0), r('天池山莊',120), r('12.7K三疊瀑布',0), r('10K崩壁',10), r('5.5K崩壁',0), r('雲海保線所',30), r('古道2.8K',0), r('尾上山2532峰',10), r('雲天宮登山口',0)
+    r('天池岔路口',2), r('南峰登山口',0), r('奇萊主山南峰',20), r('南峰登山口',0), r('天池岔路口',2),
+    r('南華山',10), r('天池岔路口',0), r('天池山莊',40), r('12.7K三疊瀑布',0), r('10K崩壁',3), r('5.5K崩壁',0), r('雲海保線所',10), r('古道2.8K',0), r('尾上山2532峰',3), r('雲天宮登山口',0)
   ]},
   both:{ start:'雲天宮登山口', startTime:'09:30', date:'2026-10-16', rows:[
-    r('尾上山2532峰',10), r('古道2.8K',0), r('雲海保線所',60), r('5.5K崩壁',0), r('10K崩壁',10), r('12.7K三疊瀑布',10), r('天池山莊',0,'03:00'),
-    r('天池岔路口',5), r('南峰登山口',0), r('奇萊主山南峰',60), r('南峰登山口',0), r('天池岔路口',5),
-    r('南華山',30), r('天池岔路口',0), r('天池山莊',120), r('12.7K三疊瀑布',0), r('10K崩壁',10), r('5.5K崩壁',0), r('雲海保線所',30), r('古道2.8K',0), r('尾上山2532峰',10), r('雲天宮登山口',0)
+    r('尾上山2532峰',3), r('古道2.8K',0), r('雲海保線所',20), r('5.5K崩壁',0), r('10K崩壁',3), r('12.7K三疊瀑布',3), r('天池山莊',0,'03:00'),
+    r('天池岔路口',2), r('南峰登山口',0), r('奇萊主山南峰',20), r('南峰登山口',0), r('天池岔路口',2),
+    r('南華山',10), r('天池岔路口',0), r('天池山莊',40), r('12.7K三疊瀑布',0), r('10K崩壁',3), r('5.5K崩壁',0), r('雲海保線所',10), r('古道2.8K',0), r('尾上山2532峰',3), r('雲天宮登山口',0)
   ]},
   blank:{ start:'雲天宮登山口', startTime:'09:30', date:'', rows:[] }
 };
@@ -319,7 +319,7 @@ const KEY='nenggao-timer-v1';
 let S = load() || {start:'雲天宮登山口', startTime:'09:30', pace:100, rows:[], src:'sh', guard:130};
 if(!S.src) S.src='sh';
 if(!S.guard) S.guard=130;
-const PRESET_VERSION=3; // 預設行程內容改版時加 1：舊裝置上的預設行程會自動換成新版
+const PRESET_VERSION=4; // 預設行程內容改版時加 1：舊裝置上的預設行程會自動換成新版
 function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
 function applyPreset(p){ S.start=p.start; S.startTime=p.startTime; S.rows=JSON.parse(JSON.stringify(p.rows)); S.startDate=p.date||todayStr(); }
 if(!NODES[S.start]){ S.start='雲天宮登山口'; S.rows=[]; }
@@ -581,7 +581,7 @@ function copyText(){
 }
 let toastT; function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
-const APP_VERSION='2026-10-15 v20';
+const APP_VERSION='2026-10-15 v21';
 try{ $('ver').textContent=APP_VERSION; }catch(e){}
 // 離線快取（只在 http(s) 下註冊；本機檔案與 Artifact 環境會略過）
 try{ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator.serviceWorker.register('./sw.js').catch(()=>{}); }catch(e){}
