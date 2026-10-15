@@ -1,0 +1,10 @@
+{
+  "name": "能高越嶺時間計算機",
+  "short_name": "能高越嶺",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f5f2",
+  "theme_color": "#1f6b86",
+  "icons": [{ "src": "icon-180.png", "sizes": "180x180", "type": "image/png" }]
+}

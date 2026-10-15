@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="能高越嶺">
+<meta name="theme-color" content="#1f6b86">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>能高越嶺時間計算機</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one column, no cards. Order follows what a hiker needs first: live status → totals → timeline (rail with dots) → add next stop → settings. Hairlines separate sections; every button carries a one-line description. */
+:root{
+  --bg:#f3f5f2; --surface:#ffffff; --fg:#1a2326; --muted:#6b787d; --line:#d9dfdb; --line-strong:#aab4b0;
+  --accent:#1f6b86; --accent-soft:#e3eef3; --gain:#3a7a3a; --loss:#8b5d20; --danger:#a8322b;
+  --font-body:Verdana,"PingFang TC","Noto Sans TC","Microsoft JhengHei",Geneva,system-ui,sans-serif;
+  --font-num:Verdana,"PingFang TC","Noto Sans TC",Geneva,system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121819; --surface:#1a2224; --fg:#e6ecea; --muted:#95a3a7; --line:#2b3537; --line-strong:#4a5659;
+    --accent:#6fb6d2; --accent-soft:#1c333c; --gain:#86c781; --loss:#d8a65e; --danger:#ef7c74; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121819; --surface:#1a2224; --fg:#e6ecea; --muted:#95a3a7; --line:#2b3537; --line-strong:#4a5659;
+  --accent:#6fb6d2; --accent-soft:#1c333c; --gain:#86c781; --loss:#d8a65e; --danger:#ef7c74; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 56px}
+.wrap{max-width:640px;margin:0 auto}
+h1{font-size:1.25rem;margin:0;font-weight:600;letter-spacing:.01em;text-wrap:balance}
+h2{font-size:.72rem;font-weight:600;color:var(--muted);letter-spacing:.1em;margin:0 0 12px}
+.sub{color:var(--muted);font-size:.8rem;margin:4px 0 0}
+section{padding-block:18px;border-bottom:1px solid var(--line)}
+section:last-child{border-bottom:0}
+header{padding-bottom:16px;border-bottom:1px solid var(--line-strong)}
+input,select,button{font:inherit;color:inherit}
+input[type=time],input[type=number],input[type=text],input[type=date],select{
+  background:transparent;border:0;border-bottom:1px solid var(--line-strong);border-radius:0;padding:6px 0;width:100%;min-width:0;
+  font-variant-numeric:tabular-nums;font-size:1rem;color:var(--fg);-webkit-appearance:none;appearance:none}
+select{background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+  background-position:calc(100% - 10px) 55%,calc(100% - 5px) 55%;background-size:5px 5px;background-repeat:no-repeat;padding-right:20px}
+input::-webkit-calendar-picker-indicator{display:none;-webkit-appearance:none}
+input[type=number]{-moz-appearance:textfield}
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input:focus-visible,select:focus-visible{outline:none;border-bottom-color:var(--accent);box-shadow:0 1px 0 0 var(--accent)}
+button{cursor:pointer;background:transparent;border:1px solid var(--line-strong);border-radius:999px;padding:7px 14px;font-size:.85rem;color:var(--fg);line-height:1.2;white-space:nowrap}
+button:focus-visible{outline:1px solid var(--accent);outline-offset:2px}
+button.danger{color:var(--danger)}
+button.act{border:0;border-radius:0;padding:2px 0;font-size:.72rem;color:var(--accent);text-align:left;white-space:normal}
+button.act.muted{color:var(--muted)}
+.hint{font-size:.8rem;color:var(--muted);line-height:1.55}
+.hint b{color:var(--fg);font-weight:600}
+/* status */
+.status{display:flex;flex-direction:column;gap:6px}
+.status .line{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;font-size:.95rem}
+.status .line .k{color:var(--muted);font-size:.78rem;min-width:3.5em}
+.status .line .v{font-weight:600}
+.status .line .t{font-variant-numeric:tabular-nums}
+.status .line .rem{color:var(--muted);font-size:.82rem}
+.status .now{font-size:.78rem;color:var(--muted)}
+/* summary */
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 16px}
+.stat{min-width:0}
+.stat .k{font-size:.7rem;color:var(--muted);letter-spacing:.06em}
+.stat .v{font-family:var(--font-num);font-size:1.05rem;font-variant-numeric:tabular-nums;white-space:nowrap;margin-top:2px}
+.stat .v small{font-size:.72rem;color:var(--muted)}
+.stat .s{font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:480px){.summary{grid-template-columns:repeat(2,1fr)}}
+/* timeline */
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.72rem;color:var(--muted);margin:-6px 0 6px}
+.legend i{display:inline-block;width:1.6em;border-bottom:2px solid var(--line-strong);margin-right:4px;vertical-align:middle}
+.legend i.est{border-bottom:1px solid var(--line-strong)} .legend i.cal{border-bottom-color:var(--accent)} .legend i.auto{border-bottom-color:var(--line-strong)}
+.timeline{display:flex;flex-direction:column;padding-left:22px;position:relative;padding-block:6px 10px}
+.timeline::before{content:"";position:absolute;left:5px;top:24px;bottom:28px;width:1px;background:var(--line-strong)}
+.node{position:relative;padding:10px 12px 8px;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.node .hint{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.node .hint.open{white-space:normal}
+.node::before{content:"";position:absolute;left:-22px;top:21px;width:9px;height:9px;border-radius:50%;background:var(--bg);border:1.5px solid var(--line-strong)}
+.node.passed{background:transparent;border-color:var(--line)}
+.node.passed::before{background:var(--line-strong)}
+.node.passed .name{color:var(--muted);font-weight:500}
+.node.next{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.node.next::before{background:var(--accent);border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.node .head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.node .name{font-weight:600;font-size:1.02rem}
+.node .elev{color:var(--muted);font-family:var(--font-num);font-size:.78rem}
+.badge{font-size:.66rem;border:1px solid var(--line-strong);color:var(--muted);border-radius:999px;padding:0 7px;letter-spacing:.06em;white-space:nowrap}
+.badge.next{color:var(--accent);border-color:var(--accent)}
+.badge.day{color:var(--fg)}
+.badge.pole{color:#8a6d00;border-color:#d8b437}
+.badge.warn{color:var(--danger);border-color:var(--danger);font-weight:600}
+.status .warn{color:var(--danger);font-size:.82rem;font-weight:600}
+.node .remove{margin-left:auto}
+.node .hint{margin-top:2px}
+.times{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:0 10px;margin-top:4px;align-items:start}
+.t{display:grid;grid-template-rows:1.3em 2.2em 1.4em;align-items:center;min-width:0}
+.t .k{font-size:.68rem;color:var(--muted);letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t .k em{font-style:normal;margin-left:6px;color:var(--accent)}
+.t.auto .k em{color:var(--muted)}
+.t input{height:2.1em;padding:0}
+.t input[type=time]{font-family:var(--font-num)}
+.t .act{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0;line-height:1.4em}
+.t .act:disabled{cursor:default}
+.t.locked input{border-bottom:2px solid var(--accent);color:var(--accent)}
+.t.locked.auto input{color:var(--fg);border-bottom:2px solid var(--line-strong)}
+.t.rest .wrap{display:flex;align-items:center;gap:4px;font-size:.8rem;color:var(--muted);height:2.2em}
+.t.rest input[type=number]{width:3.2em;text-align:center;font-family:var(--font-num)}
+.t.readonly input{color:var(--muted);border-bottom-style:dotted}
+.t input:disabled{color:var(--muted);border-bottom-color:var(--line)}
+.seg{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;padding:6px 12px 8px;color:var(--muted);font-size:.78rem;font-variant-numeric:tabular-nums}
+.seg .gain{color:var(--gain)} .seg .loss{color:var(--loss)}
+.seg label{display:inline-flex;align-items:baseline;gap:4px}
+.seg input[type=number]{width:3.2em;padding:0;font-size:.82rem;text-align:center;border-bottom-color:var(--line)}
+.seg .act{font-size:.72rem;padding:0}
+/* next */
+.next-k{font-size:.8rem;color:var(--muted);margin-bottom:10px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line-strong);background:transparent;border-radius:999px;padding:8px 14px;font-size:.9rem;display:inline-flex;gap:6px;align-items:baseline;color:var(--fg)}
+.chip .m{color:var(--muted);font-family:var(--font-num);font-size:.75rem}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+.custom{display:grid;grid-template-columns:minmax(0,1fr) 4.5em auto;gap:12px;margin-top:16px;align-items:end}
+label.f{display:flex;flex-direction:column;gap:2px;font-size:.72rem;color:var(--muted);letter-spacing:.06em;min-width:0}
+/* settings */
+.group{display:grid;grid-template-columns:1fr 1fr;gap:14px 20px;margin-bottom:18px}
+.group .full{grid-column:1/-1}
+.group h3{grid-column:1/-1;font-size:.7rem;font-weight:600;color:var(--muted);letter-spacing:.08em;margin:0 0 -6px}
+.fnote{font-size:.72rem;color:var(--muted);letter-spacing:0;margin-top:3px}
+.actions{display:flex;flex-direction:column;gap:10px}
+.action{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:center}
+.action span{font-size:.78rem;color:var(--muted);line-height:1.4}
+.help{margin-top:16px}
+.help summary{cursor:pointer;font-size:.78rem;color:var(--accent);letter-spacing:.04em;list-style:none;display:inline-flex;align-items:center;gap:6px}
+.help summary::-webkit-details-marker{display:none}
+.help summary::before{content:"";width:5px;height:5px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(-45deg);transition:transform .15s}
+.help[open] summary::before{transform:rotate(45deg)}
+.help p{margin:8px 0 0}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:999px;font-size:.85rem;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+@media (prefers-reduced-motion:reduce){.toast,.help summary::before{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>能高越嶺時間計算機</h1>
+    <p class="sub">雲天宮登山口起登。步程時間可選上河文化步程圖或山輕野行攻略。純離線，資料只存在這台裝置。</p>
+  </header>
+
+  <section id="status" class="status"></section>
+
+  <section>
+    <h2>全程總覽</h2>
+    <div class="summary" id="summary"></div>
+  </section>
+
+  <section>
+    <h2>行程</h2>
+    <div class="legend"><span><i class="est"></i>推估</span><span><i class="cal"></i>手動校準</span><span><i class="auto"></i>已過，自動鎖定</span></div>
+    <div class="timeline" id="timeline"></div>
+  </section>
+
+  <section id="next"></section>
+
+  <section id="settings">
+    <h2>設定</h2>
+    <div class="group">
+      <h3>行程</h3>
+      <label class="f full">載入預設行程
+        <select id="preset">
+          <option value="">— 未套用預設，自己從起點排 —</option>
+          <option value="day1">第一天：雲天宮 09:30 → 尾上山 → 雲海保線所 → 崩壁 → 天池山莊</option>
+          <option value="day2">第二天：天池山莊 03:00 → 奇萊南峰 → 南華山 → 雲海 → 雲天宮</option>
+          <option value="both">兩天完整（天池山莊過夜）</option>
+          <option value="blank">空白（自己選起點）</option>
+        </select>
+        <span class="fnote">10/16 17:00 前開頁自動載入第一天，之後自動載入第二天</span>
+      </label>
+      <label class="f">出發日期
+        <input type="date" id="startDate">
+        <span class="fnote">用來判斷哪些節點已經過了</span>
+      </label>
+      <label class="f">出發時間
+        <input type="time" id="startTime" value="09:30">
+      </label>
+      <label class="f full">起點
+        <select id="start"></select>
+        <span class="fnote">行程已有節點時不能換起點，先清空</span>
+      </label>
+    </div>
+    <div class="group">
+      <h3>推算方式</h3>
+      <label class="f">參考時間來源
+        <select id="src">
+          <option value="sh">上河文化步程圖（偏快）</option>
+          <option value="ll">山輕野行攻略（偏保守）</option>
+        </select>
+        <span class="fnote">某段只有一種來源時自動用該來源</span>
+      </label>
+      <label class="f">腳程係數（%）
+        <input type="number" id="pace" min="50" max="200" step="5" value="100">
+        <span class="fnote">100＝照參考時間，120＝慢兩成；只影響步行段</span>
+      </label>
+      <label class="f full">保底係數（%）
+        <input type="number" id="guard" min="100" max="300" step="5" value="130">
+        <span class="fnote">每站最晚抵達＝出發後參考時間的 130%。預計或實際超過就標紅提醒加速</span>
+      </label>
+    </div>
+    <div class="actions">
+      <div class="action"><button id="lockBtn" type="button">鎖住已過時間</button><span>把時間已經過去的節點固定住，之後改設定不會動到它們。開頁時會自動做一次。</span></div>
+      <div class="action"><button id="copyBtn" type="button">複製成文字</button><span>整份行程變成文字，貼到 LINE 給隊友。* 代表手動校準過的時間。</span></div>
+      <div class="action"><button id="resetBtn" type="button" class="danger">清空行程</button><span>刪掉所有節點，從起點重新排。</span></div>
+    </div>
+    <details class="help">
+      <summary>使用說明</summary>
+      <p class="hint">每一站有三個時間：<b>到達</b>、<b>休息</b>分鐘、<b>出發</b>。到達與出發預設是推估值；走到那一站時按「記錄現在」或直接改時間，後面所有節點會重新推算。改過的時間會變藍色並標「已校準」，按「還原推估」回到推估值。</p>
+      <p class="hint">每站下方的「下一站」列出從這裡可以走去的地點和參考分鐘，點一下就接上。路段時間可以在「改為」欄自己填分鐘數。節點下方的灰色備註點一下可展開全文。</p>
+      <p class="hint">每站名稱旁的「最晚」是保底時間：出發後參考時間乘上保底係數。預計或實際到達晚於它，就會出現紅字「落後，加速」。</p>
+      <p class="hint">時間已經過去的節點，開頁時會自動鎖住（灰色底線、標「已過」），改係數或來源都不會動到它們。</p>
+    </details>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+
+(function(){
+'use strict';
+// ---------- 路網資料 ----------
+// 來源：sh＝上河文化 G11 步程圖、tm＝隊伍資料（雲天宮段）、ll＝山輕野行 2025-07 奇萊南華攻略建議時間表
+const SRC = {sh:'上河', tm:'隊伍', ll:'山輕野行'};
+const NODES = {
+  '屯原登山口停車場':{note:'停車、出發；到雲天宮登山口 3.2K 林道，可請馬蘭民宿接駁'},
+  '雲天宮登山口':{pole:0,note:'新高繞線起點：1.5K 陡上近 400m 到尾上山，再下切接回古道 2.8K'},
+  '尾上山2532峰':{elev:2532,pole:15,note:'第一天最陡段的頂點'},
+  '古道2.8K':{pole:28,note:'高繞線接回能高越嶺古道處；回程高繞起點'},
+  '雲海保線所':{elev:2360,note:'有廁所與平台，建議大休／午餐'},
+  '5.5K崩壁':{note:'快速通過，切勿逗留'},
+  '10K崩壁':{note:'快速通過，切勿逗留'},
+  '12.7K三疊瀑布':{note:'吊橋左側下切可玩水拍照'},
+  '天池山莊':{elev:2860},
+  '天池岔路口':{}, '南峰登山口':{},
+  '奇萊主山南峰':{elev:3357,note:'日出前 20 分到頂；山腰黃金大草原拍照約 1 小時，山頂風大注意保暖'},
+  '南華山':{elev:3182,note:'視野開闊，可多待一下'}
+};
+// [A, B, A→B 分鐘, B→A 分鐘, 來源]
+const WALK = [
+  ['屯原登山口停車場','雲天宮登山口',30,20,'ll'],
+  ['雲天宮登山口','雲海保線所',150,135,'tm'],
+  ['雲天宮登山口','尾上山2532峰',120,100,'ll'],
+  ['尾上山2532峰','古道2.8K',40,80,'ll'],
+  ['古道2.8K','雲海保線所',50,30,'ll'],
+  ['雲海保線所','天池山莊',210,180,'sh'],
+  ['雲海保線所','天池山莊',225,150,'ll'],
+  ['雲海保線所','5.5K崩壁',30,20,'ll'],
+  ['5.5K崩壁','10K崩壁',135,90,'ll'],
+  ['10K崩壁','12.7K三疊瀑布',45,30,'ll'],
+  ['12.7K三疊瀑布','天池山莊',15,10,'ll'],
+  ['天池山莊','天池岔路口',60,40,'sh'],
+  ['天池山莊','天池岔路口',null,30,'ll'],
+  ['天池岔路口','南峰登山口',20,15,'sh'],
+  ['南峰登山口','奇萊主山南峰',60,40,'sh'],
+  ['天池山莊','奇萊主山南峰',120,null,'ll'],
+  ['奇萊主山南峰','天池岔路口',70,null,'ll'],
+  ['天池岔路口','南華山',40,30,'sh'],
+  ['天池岔路口','南華山',50,30,'ll']
+];
+const CAR = [];
+const ADJ = {};
+function addEdge(a,b,m,car,src){ if(m==null) return; (ADJ[a] = ADJ[a]||[]).push({to:b,min:m,car,src}); }
+WALK.forEach(([a,b,ab,ba,src])=>{ addEdge(a,b,ab,false,src); addEdge(b,a,ba,false,src); });
+CAR.forEach(([a,b,ab,ba])=>{ addEdge(a,b,ab,true,'sh'); addEdge(b,a,ba,true,'sh'); });
+// 依「參考時間來源」偏好挑邊：上河優先 sh>tm>ll；山輕野行優先 ll>sh>tm
+function srcOrder(){ return (S && S.src==='ll') ? ['ll','sh','tm'] : ['sh','tm','ll']; }
+function pick(list){ const o=srcOrder(); return list.slice().sort((x,y)=>o.indexOf(x.src)-o.indexOf(y.src))[0]||null; }
+function edge(a,b){ return pick((ADJ[a]||[]).filter(e=>e.to===b)); }
+function nextOptions(a){ const seen={}; (ADJ[a]||[]).forEach(e=>{ (seen[e.to]=seen[e.to]||[]).push(e); }); return Object.keys(seen).map(k=>pick(seen[k])); }
+
+const PRESETS = {
+  day1:{ start:'雲天宮登山口', startTime:'09:30', date:'2026-10-16', rows:[
+    r('尾上山2532峰',10), r('古道2.8K',0), r('雲海保線所',60), r('5.5K崩壁',0), r('10K崩壁',10), r('12.7K三疊瀑布',10), r('天池山莊',0)
+  ]},
+  day2:{ start:'天池山莊', startTime:'03:00', date:'2026-10-17', rows:[
+    r('天池岔路口',5), r('南峰登山口',0), r('奇萊主山南峰',60), r('南峰登山口',0), r('天池岔路口',5),
+    r('南華山',30), r('天池岔路口',0), r('天池山莊',120), r('12.7K三疊瀑布',0), r('10K崩壁',10), r('5.5K崩壁',0), r('雲海保線所',30), r('古道2.8K',0), r('尾上山2532峰',10), r('雲天宮登山口',0)
+  ]},
+  both:{ start:'雲天宮登山口', startTime:'09:30', date:'2026-10-16', rows:[
+    r('尾上山2532峰',10), r('古道2.8K',0), r('雲海保線所',60), r('5.5K崩壁',0), r('10K崩壁',10), r('12.7K三疊瀑布',10), r('天池山莊',0,'03:00'),
+    r('天池岔路口',5), r('南峰登山口',0), r('奇萊主山南峰',60), r('南峰登山口',0), r('天池岔路口',5),
+    r('南華山',30), r('天池岔路口',0), r('天池山莊',120), r('12.7K三疊瀑布',0), r('10K崩壁',10), r('5.5K崩壁',0), r('雲海保線所',30), r('古道2.8K',0), r('尾上山2532峰',10), r('雲天宮登山口',0)
+  ]},
+  blank:{ start:'雲天宮登山口', startTime:'09:30', date:'', rows:[] }
+};
+function r(node,rest,departOverride){ return {node,rest:rest||0,segOverride:null,arriveOverride:null,departOverride:departOverride||null}; }
+
+// ---------- 狀態 ----------
+const KEY='nenggao-timer-v1';
+let S = load() || {start:'雲天宮登山口', startTime:'09:30', pace:100, rows:[], src:'sh', guard:130};
+if(!S.src) S.src='sh';
+if(!S.guard) S.guard=130;
+const PRESET_VERSION=3; // 預設行程內容改版時加 1：舊裝置上的預設行程會自動換成新版
+function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function applyPreset(p){ S.start=p.start; S.startTime=p.startTime; S.rows=JSON.parse(JSON.stringify(p.rows)); S.startDate=p.date||todayStr(); }
+if(!NODES[S.start]){ S.start='雲天宮登山口'; S.rows=[]; }
+// 依日期自動切換預設：2026-10-16 17:00 前＝第一天（09:30 出發），之後＝第二天（03:00 出發）。手動選過預設就不再覆蓋。
+const SWITCH_AT = new Date(2026,9,16,17,0,0).getTime();
+function expectedPreset(){ return Date.now() < SWITCH_AT ? 'day1' : 'day2'; }
+let autoNote = null;
+(function(){ const k=expectedPreset(); if(S.autoPreset!==k || (PRESETS[S.autoPreset] && S.presetVersion!==PRESET_VERSION)){ applyPreset(PRESETS[k]); S.pace=S.pace||100; S.autoPreset=k; S.presetVersion=PRESET_VERSION;
+  autoNote = k==='day1' ? '已自動載入第一天行程，10/16 17:00 後會改為第二天' : '已自動載入第二天行程（03:00 出發）'; } })();
+function load(){ try{ const j=localStorage.getItem(KEY); return j?JSON.parse(j):null; }catch(e){ return null; } }
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+
+// ---------- 時間工具 ----------
+function pad(n){ return String(n).padStart(2,'0'); }
+function hm(str){ if(!str) return null; const [h,m]=str.split(':').map(Number); if(isNaN(h)||isNaN(m)) return null; return h*60+m; }
+function fmt(t){ if(t==null) return '—'; const d=Math.floor(t/1440); const x=((t%1440)+1440)%1440; return pad(Math.floor(x/60))+':'+pad(x%60); }
+function dayOf(t){ return Math.floor(t/1440); }
+function nowHM(){ const d=new Date(); return pad(d.getHours())+':'+pad(d.getMinutes()); }
+// 把「HH:MM」放到 anchor 附近：若比 anchor 早超過 6 小時，視為翌日
+function resolve(str, anchor){ const v=hm(str); if(v==null) return null; let t=dayOf(anchor)*1440+v; if(t < anchor-360) t+=1440; return t; }
+
+// ---------- 已過節點鎖定 ----------
+function nowAbs(){ if(!S.startDate) return null; const [y,m,d]=S.startDate.split('-').map(Number); const base=new Date(y,m-1,d).getTime(); return Math.floor((Date.now()-base)/60000); }
+// 把推估時間已經過去的節點鎖成目前值（標記 auto，與手動校準區分）；回傳鎖定數
+function lockPassed(){
+  const now=nowAbs(); if(now==null) return 0;
+  const C=compute(); let n=0;
+  C.forEach((c,i)=>{ if(i===0) return; const row=c.row;
+    if(c.depart<=now){ if(!row.arriveOverride){ row.arriveOverride=fmt(c.arrive); row.autoArr=true; n++; } if(!row.departOverride){ row.departOverride=fmt(c.depart); row.autoDep=true; n++; } }
+    else if(c.arrive<=now && !row.arriveOverride){ row.arriveOverride=fmt(c.arrive); row.autoArr=true; n++; } });
+  return n;
+}
+// ---------- 保底時間 ----------
+// 基準＝參考時間 100%、休息照填、忽略校準；只有過夜（停留 ≥6 小時）的出發時間當新的起算點。
+// 各節點最晚抵達＝起算點 + 保底係數 ×（基準到達 − 起算點）
+function computeDeadlines(){
+  const g=(Number(S.guard)||130)/100; const out=[null];
+  let prevNode=S.start, prevDepart=hm(S.startTime)||0, anchor=prevDepart;
+  for(const row of S.rows){
+    const e=edge(prevNode,row.node);
+    const seg=row.segOverride!=null?Number(row.segOverride):(e?e.min:0);
+    const arrive=prevDepart+seg; let depart=arrive+(Number(row.rest)||0);
+    if(row.departOverride && !row.autoDep){ const d=resolve(row.departOverride,arrive); if(d-arrive>=360) depart=d; }
+    out.push(anchor+Math.round((arrive-anchor)*g));
+    if(depart-arrive>=360) anchor=depart;
+    prevNode=row.node; prevDepart=depart;
+  }
+  return out;
+}
+// ---------- 計算 ----------
+function compute(){
+  const out=[]; const pace=(Number(S.pace)||100)/100;
+  let prevNode=S.start, prevDepart=hm(S.startTime)||0;
+  out.push({node:S.start, arrive:null, depart:prevDepart, rest:0, seg:null, isStart:true});
+  for(const row of S.rows){
+    const e=edge(prevNode,row.node);
+    const mapMin = e? e.min : null;
+    const car = e? e.car : false;
+    const src = e? e.src : null;
+    const est = mapMin==null? null : (car? mapMin : Math.round(mapMin*pace));
+    const seg = row.segOverride!=null ? Number(row.segOverride) : est;
+    let arrive = row.arriveOverride ? resolve(row.arriveOverride, prevDepart) : (seg==null? null : prevDepart+seg);
+    if(arrive==null) arrive=prevDepart;
+    let depart, rest;
+    if(row.departOverride){ depart=resolve(row.departOverride, arrive); rest=depart-arrive; }
+    else { rest=Number(row.rest)||0; depart=arrive+rest; }
+    out.push({node:row.node, arrive, depart, rest, seg, mapMin, est, car, src, row,
+      arriveLocked:!!row.arriveOverride, departLocked:!!row.departOverride, segLocked:row.segOverride!=null});
+    prevNode=row.node; prevDepart=depart;
+  }
+  return out;
+}
+
+// ---------- 畫面 ----------
+const $=id=>document.getElementById(id);
+function elevDelta(a,b){ const ea=NODES[a]&&NODES[a].elev, eb=NODES[b]&&NODES[b].elev; if(ea==null||eb==null) return null; return eb-ea; }
+function nodeLabel(n){ const x=NODES[n]; return n + (x&&x.alias? '（'+x.alias+'）':''); }
+function dur(m){ m=Math.max(0,Math.round(m)); const h=Math.floor(m/60), mm=m%60; return (h?h+' 小時 ':'')+(mm||!h? mm+' 分':''); }
+function durShort(m){ m=Math.max(0,Math.round(m)); const h=Math.floor(m/60), mm=m%60; return (h?h+'h':'')+(mm||!h? mm+'m':''); }
+function dayTag(t,day0){ const d=dayOf(t)-day0; return d<=0? '' : '<span class="badge day">D'+(d+1)+'</span>'; }
+function stat(k,v,s){ return '<div class="stat"><div class="k">'+k+'</div><div class="v">'+v+'</div><div class="s">'+s+'</div></div>'; }
+function dateLabel(offsetDays){ if(!S.startDate) return ''; const [y,m,d]=S.startDate.split('-').map(Number); const dt=new Date(y,m-1,d+(offsetDays||0)); return (dt.getMonth()+1)+'/'+dt.getDate(); }
+
+function renderStartSelect(){
+  const sel=$('start'); sel.innerHTML='';
+  Object.keys(NODES).forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
+  sel.value=S.start;
+}
+
+// 目前進度：回傳 {phase, nextIdx, ...}
+function progress(C){
+  const now=nowAbs(); if(now==null) return {phase:'plan'};
+  const last=C[C.length-1]; const endT=last.arrive==null?last.depart:last.arrive;
+  if(now < C[0].depart) return {phase:'plan', now};
+  if(C.length>1 && now>=endT) return {phase:'done', now, endT, end:last.node};
+  let idx=C.findIndex((c,i)=>i>0 && c.arrive>now); if(idx<0) idx=C.length-1;
+  const at=C[idx-1]||C[0];
+  return {phase:'during', now, nextIdx:idx, next:C[idx], at, resting: now<at.depart, endT, end:last.node};
+}
+
+function render(){
+  $('startTime').value=S.startTime; $('pace').value=S.pace; $('guard').value=S.guard; $('start').value=S.start; $('src').value=S.src; $('startDate').value=S.startDate||'';
+  $('preset').value = PRESETS[S.autoPreset] ? S.autoPreset : '';
+  $('start').disabled = S.rows.length>0;
+  const C=compute();
+  const DL=computeDeadlines();
+  const day0=dayOf(C[0].depart);
+  const P=progress(C);
+  // 每站保底判定：actual＝已校準或已過的到達；否則用預計到達
+  C.forEach((c,i)=>{ if(i===0) return; c.deadline=DL[i]; const over=c.arrive-c.deadline;
+    c.late = over>0 ? {min:over, actual:c.arriveLocked} : null; });
+  const last=C[C.length-1]; const endT=last.arrive==null?last.depart:last.arrive;
+
+  // 現況
+  let st='';
+  if(P.phase==='plan'){
+    st='<div class="now">行程日 '+dateLabel()+'</div>'+
+       '<div class="line"><span class="k">出發</span><span class="v">'+C[0].node+'</span><span class="t">'+fmt(C[0].depart)+'</span></div>'+
+       (C.length>1?'<div class="line"><span class="k">終點</span><span class="v">'+last.node+'</span><span class="t">'+fmt(endT)+'</span><span class="rem">'+dayTag(endT,day0)+' 全程 '+durShort(endT-C[0].depart)+'</span></div>':'<div class="line"><span class="rem">還沒有節點，到下方「下一站」加入</span></div>');
+  } else if(P.phase==='done'){
+    st='<div class="now">現在 '+fmt(P.now)+'</div><div class="line"><span class="k">狀態</span><span class="v">行程已結束</span><span class="rem">終點 '+P.end+' '+fmt(P.endT)+'</span></div>';
+  } else {
+    const nx=P.next;
+    st='<div class="now">現在 '+fmt(P.now)+'　'+dateLabel(dayOf(P.now))+'</div>'+
+       (P.resting?'<div class="line"><span class="k">目前</span><span class="v">'+P.at.node+'</span><span class="rem">休息中，預計 '+fmt(P.at.depart)+' 出發</span></div>'
+                 :'<div class="line"><span class="k">目前</span><span class="v">'+P.at.node+' → '+nx.node+'</span><span class="rem">'+fmt(P.at.depart)+' 出發</span></div>')+
+       '<div class="line"><span class="k">下一站</span><span class="v">'+nx.node+'</span><span class="t">預計 '+fmt(nx.arrive)+'</span><span class="rem">還有 '+durShort(nx.arrive-P.now)+'</span>'+
+         (nx.deadline!=null?'<span class="rem">保底 '+fmt(nx.deadline)+'</span>':'')+(nx.late?'<span class="warn">落後 '+durShort(nx.late.min)+'，請加速</span>':'')+'</div>'+
+       (nx!==last?'<div class="line"><span class="k">終點</span><span class="v">'+last.node+'</span><span class="t">預計 '+fmt(endT)+'</span><span class="rem">還有 '+durShort(endT-P.now)+'</span></div>':'');
+  }
+  $('status').innerHTML=st;
+
+  // 總覽
+  let walk=0,rest=0,gain=0,loss=0,lastElev=null;
+  C.forEach((c,i)=>{ if(i>0){ if(c.seg!=null && !c.car) walk+=c.seg; if(c.rest>0 && c.rest<600) rest+=c.rest; }
+    const e=NODES[c.node]&&NODES[c.node].elev; if(e!=null){ if(lastElev!=null){ const d=e-lastElev; if(d>0) gain+=d; else loss-=d; } lastElev=e; } });
+  $('summary').innerHTML=
+    stat('步行時間', durShort(walk), '不含休息')+
+    stat('休息時間', durShort(rest), '不含過夜')+
+    stat('預計抵達終點', fmt(endT), (dayTag(endT,day0)?'隔天 ':'')+last.node)+
+    stat('累計升降', '▲'+gain+'<small> m</small>', '▼'+loss+' m，只計有標高的點');
+
+  // 行程
+  const tl=$('timeline'); tl.innerHTML='';
+  C.forEach((c,i)=>{
+    if(i>0){
+      const d=document.createElement('div'); d.className='seg';
+      const delta=elevDelta(C[i-1].node,c.node);
+      const deltaHtml = delta==null? '' : (delta>=0? '<span class="gain">▲ +'+delta+' m</span>' : '<span class="loss">▼ '+delta+' m</span>');
+      const mapHtml = c.mapMin==null ? '<span>自訂路段</span>'
+        : '<span>'+durShort(c.mapMin)+((!c.car&&c.est!==c.mapMin)?'（係數後 '+durShort(c.est)+'）':'')+' · '+(SRC[c.src]||'地圖')+'</span>';
+      d.innerHTML=mapHtml+deltaHtml+
+        '<label>改為 <input type="number" min="0" step="5" data-i="'+(i-1)+'" data-k="segOverride" placeholder="'+(c.est==null?'分鐘':c.est)+'" value="'+(c.segLocked?c.seg:'')+'"> 分</label>'+
+        (c.segLocked?'<button class="act" data-clear="segOverride" data-i="'+(i-1)+'" type="button">還原</button>':'');
+      tl.appendChild(d);
+    }
+    const n=document.createElement('div');
+    const passed = P.phase==='during' ? (i===0 ? P.now>=c.depart : c.depart<=P.now) : P.phase==='done';
+    const isNext = P.phase==='during' && i===P.nextIdx;
+    n.className='node'+(passed?' passed':'')+(isNext?' next':'');
+    const e=NODES[c.node]; const elev=e&&e.elev!=null? e.elev+' m':'';
+    const tRef = c.arrive==null? c.depart : c.arrive;
+    const ri=i-1;
+    const timeCell=(k,label,val,locked,auto)=>{
+      const state = locked ? '<em>'+(auto?'已過':'已校準')+'</em>' : '';
+      const act = locked
+        ? '<button class="act'+(auto?' muted':'')+'" type="button" data-clear="'+k+'" data-i="'+ri+'">還原推估</button>'
+        : '<button class="act" type="button" data-now="'+k+'" data-i="'+ri+'">記錄現在</button>';
+      return '<div class="t'+(locked?' locked':'')+(auto?' auto':'')+'"><span class="k">'+label+state+'</span><input type="time" data-i="'+ri+'" data-k="'+k+'" value="'+fmt(val)+'">'+act+'</div>';
+    };
+    const pole = e&&e.pole!=null ? '<span class="badge pole">黃柱 '+e.pole+'</span>' : '';
+    const dl = c.deadline!=null ? '<span class="elev">最晚 '+fmt(c.deadline)+'</span>' : '';
+    const warn = c.late ? '<span class="badge warn">'+(c.late.actual?'落後':'預計落後')+' '+durShort(c.late.min)+'，加速</span>' : '';
+    n.innerHTML='<div class="head"><span class="name">'+nodeLabel(c.node)+'</span>'+pole+'<span class="elev">'+elev+'</span>'+dl+dayTag(tRef,day0)+(isNext?'<span class="badge next">下一站</span>':'')+warn+
+      (i===C.length-1 && i>0 ? '<button class="act remove danger" type="button" data-remove="1">移除這站</button>':'')+'</div>'+
+      (e&&e.note? '<div class="hint">'+e.note+'</div>':'')+
+      '<div class="times">'+
+      (c.isStart
+        ? '<div class="t"><span class="k">到達</span><input type="time" disabled value=""><button class="act muted" type="button" disabled>起點</button></div>'+
+          '<div class="t rest"><span class="k">休息</span><div class="wrap"><input type="number" disabled value=""> 分</div><span class="act"></span></div>'+
+          '<div class="t locked"><span class="k">出發</span><input type="time" id="startTimeInline" value="'+S.startTime+'"><button class="act muted" type="button" disabled>可直接改</button></div>'
+        : timeCell('arriveOverride','到達',c.arrive,c.arriveLocked,c.row.autoArr)+
+          '<div class="t rest'+(c.departLocked?' readonly':'')+'"><span class="k">休息</span><div class="wrap"><input type="number" min="0" step="5" data-i="'+ri+'" data-k="rest" value="'+(c.rest)+'"'+(c.departLocked?' disabled':'')+'> 分</div>'+(c.departLocked?'<button class="act muted" type="button" disabled>由出發回推</button>':'<span class="act"></span>')+'</div>'+
+          timeCell('departOverride','出發',c.depart,c.departLocked,c.row.autoDep))+
+      '</div>';
+    tl.appendChild(n);
+  });
+
+  // 下一站
+  const cur=last.node; const opts=nextOptions(cur);
+  $('next').innerHTML='<h2>加下一站</h2><div class="next-k">從「'+cur+'」出發可以走到：點一下就接在行程後面</div><div class="chips">'+
+    opts.map(o=>{ const d=elevDelta(cur,o.to); return '<button class="chip" type="button" data-add="'+o.to+'">'+o.to+'<span class="m">'+durShort(o.min)+(d==null?'':(d>=0?' ▲'+d:' ▼'+(-d)))+(o.src!==srcOrder()[0]?' · '+SRC[o.src]:'')+'</span></button>'; }).join('')+
+    '</div><form class="custom" id="customForm"><label class="f">其他地點<input type="text" id="customName" placeholder="例：松原駐在所"></label><label class="f">分鐘<input type="number" id="customMin" min="0" step="5" placeholder="60"></label><button type="submit">加入</button></form>';
+  save();
+}
+
+document.addEventListener('change', ev=>{
+  const el=ev.target;
+  if(el.id==='startTime'||el.id==='startTimeInline'){ S.startTime=el.value||'06:00'; return render(); }
+  if(el.id==='src'){ S.src=el.value; return render(); }
+  if(el.id==='pace'){ S.pace=Math.max(50,Math.min(200,Number(el.value)||100)); return render(); }
+  if(el.id==='start'){ S.start=el.value; return render(); }
+  if(el.id==='preset'){ const p=PRESETS[el.value]; if(!p) return; applyPreset(p); S.autoPreset=el.value; S.presetVersion=PRESET_VERSION; return render(); }
+  if(el.id==='guard'){ S.guard=Math.max(100,Math.min(300,Number(el.value)||130)); return render(); }
+  if(el.id==='startDate'){ S.startDate=el.value||todayStr(); return render(); }
+  if(el.dataset.k!=null){
+    const row=S.rows[Number(el.dataset.i)]; if(!row) return;
+    const k=el.dataset.k; const v=el.value;
+    if(k==='rest') row.rest=Math.max(0,Number(v)||0);
+    else if(k==='segOverride') row.segOverride = v===''? null : Math.max(0,Number(v)||0);
+    else { row[k] = v||null; if(k==='arriveOverride') row.autoArr=false; if(k==='departOverride') row.autoDep=false; }
+    return render();
+  }
+});
+document.addEventListener('click', ev=>{
+  const h=ev.target.closest('.node .hint'); if(h){ h.classList.toggle('open'); return; }
+  const b=ev.target.closest('button'); if(!b) return;
+  if(b.dataset.add){ S.rows.push(r(b.dataset.add,0)); return render(); }
+  if(b.dataset.remove){ S.rows.pop(); return render(); }
+  if(b.dataset.clear){ const row=S.rows[Number(b.dataset.i)]; if(row){ row[b.dataset.clear]=null; if(b.dataset.clear==='arriveOverride') row.autoArr=false; if(b.dataset.clear==='departOverride') row.autoDep=false; } return render(); }
+  if(b.id==='lockBtn'){ const n=lockPassed(); render(); return toast(n? '已鎖定 '+n+' 個已過時間':'沒有已過的節點'); }
+  if(b.dataset.now){ const row=S.rows[Number(b.dataset.i)]; if(row){ row[b.dataset.now]=nowHM(); if(b.dataset.now==='arriveOverride') row.autoArr=false; else row.autoDep=false; } return render(); }
+  if(b.id==='resetBtn'){ S.rows=[]; S.autoPreset=''; return render(); }
+  if(b.id==='copyBtn'){ return copyText(); }
+});
+document.addEventListener('submit', ev=>{
+  if(ev.target.id!=='customForm') return; ev.preventDefault();
+  const name=$('customName').value.trim(); const min=Number($('customMin').value);
+  if(!name) return toast('請填地點名稱');
+  const row=r(name,0); row.segOverride = isNaN(min)||$('customMin').value===''? 0 : min; S.rows.push(row); render();
+});
+function copyText(){
+  const C=compute(); const DL=computeDeadlines(); C.forEach((c,i)=>{ if(i>0) c.deadline=DL[i]; }); const day0=dayOf(C[0].depart);
+  const lines=['能高越嶺行程（腳程 '+S.pace+'%，時間來源 '+(S.src==='ll'?'山輕野行':'上河')+'）'];
+  C.forEach((c,i)=>{ const d=dayOf(c.arrive==null?c.depart:c.arrive)-day0; const dt=d>0?'D'+(d+1)+' ':'';
+    if(i===0) lines.push(dt+c.node+'  出發 '+fmt(c.depart));
+    else lines.push(dt+c.node+'  到 '+fmt(c.arrive)+(c.deadline!=null?'(最晚'+fmt(c.deadline)+')':'')+((c.arriveLocked&&!c.row.autoArr)?'*':'')+(c.rest?'  休 '+c.rest+'分':'')+'  發 '+fmt(c.depart)+((c.departLocked&&!c.row.autoDep)?'*':'')+'  （'+(c.car?'車 ':'')+(c.seg==null?'?':c.seg)+'分）'); });
+  lines.push('* 為實際校準時間');
+  const txt=lines.join('\n');
+  const done=()=>toast('已複製行程文字');
+  const fallback=()=>{ const ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); done(); }catch(e){ toast('無法複製，請手動選取'); } ta.remove(); };
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done,fallback); else fallback();
+}
+let toastT; function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
+
+// 離線快取（只在 http(s) 下註冊；本機檔案與 Artifact 環境會略過）
+try{ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator.serviceWorker.register('./sw.js').catch(()=>{}); }catch(e){}
+if(!S.startDate) S.startDate=todayStr();
+const lockedN=lockPassed();
+renderStartSelect(); render();
+if(autoNote) setTimeout(()=>toast(autoNote),300);
+else if(lockedN) setTimeout(()=>toast('已鎖定 '+lockedN+' 個已過時間'),300);
+})();
+</script>
+</body>
+</html>
