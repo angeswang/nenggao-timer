@@ -177,7 +177,7 @@ label.f{display:flex;flex-direction:column;gap:2px;font-size:.72rem;color:var(--
           <option value="both">兩天完整（天池山莊過夜）</option>
           <option value="blank">空白（自己選起點）</option>
         </select>
-        <span class="fnote">10/16 22:00 前開頁自動載入第一天，之後自動載入第二天；手動選過或清空後就不再自動換</span>
+        <span class="fnote">10/16 22:00 前開頁自動載入第一天，之後自動切到第二天；選「兩天完整」「空白」或清空後就不再自動換</span>
       </label>
       <label class="f">出發日期
         <input type="date" id="startDate">
@@ -327,9 +327,14 @@ if(!NODES[S.start]){ S.start='雲天宮登山口'; S.rows=[]; }
 // 只有「自動套用」的預設才會被自動切換；手動選過預設、清空、或自己排的行程（S.manualPreset=true）一律不碰。
 const SWITCH_AT = new Date(2026,9,16,22,0,0).getTime(); // 第一天預計 18:15 到山莊，切換點放到 22:00 避免人還在路上被換掉
 function expectedPreset(){ return Date.now() < SWITCH_AT ? 'day1' : 'day2'; }
-let autoNote = null;
-(function(){ const k=expectedPreset(); if(!S.manualPreset && (S.autoPreset!==k || S.presetVersion!==PRESET_VERSION)){ applyPreset(PRESETS[k]); S.pace=S.pace||100; S.autoPreset=k; S.presetVersion=PRESET_VERSION;
-  autoNote = k==='day1' ? '已自動載入第一天行程，10/16 22:00 後會改為第二天' : '已自動載入第二天行程（03:00 出發）'; } })();
+let autoNote = null, k2 = null;
+(function(){ const k=expectedPreset();
+  if(S.manualPreset) return; // 選過「兩天完整」「空白」或清空：完全不自動動
+  const firstLoad = !PRESETS[S.autoPreset];
+  const forward = S.autoPreset==='day1' && k==='day2'; // 只往前切（第一天→第二天），手動選了第二天不會被退回第一天
+  const refresh = !firstLoad && S.presetVersion!==PRESET_VERSION; // 預設內容改版：重套同一個預設
+  if(firstLoad || forward || refresh){ const key = (firstLoad||forward) ? k : S.autoPreset; applyPreset(PRESETS[key]); S.pace=S.pace||100; S.autoPreset=key; S.presetVersion=PRESET_VERSION; k2=key;
+  autoNote = k2==='day1' ? '已自動載入第一天行程，10/16 22:00 後會改為第二天' : k2==='day2' ? '已自動載入第二天行程（03:00 出發）' : '預設行程已更新為新版'; } })();
 function load(){ try{ const j=localStorage.getItem(KEY); return j?JSON.parse(j):null; }catch(e){ return null; } }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
 
@@ -394,7 +399,7 @@ function compute(){
     let arrive = row.arriveOverride ? resolve(row.arriveOverride, prevDepart) : (seg==null? null : prevDepart+seg);
     if(arrive==null) arrive=prevDepart;
     let depart, rest;
-    if(row.departOverride){ depart=resolve(row.departOverride, arrive); rest=Math.max(0,depart-arrive); }
+    if(row.departOverride){ depart=Math.max(arrive, resolve(row.departOverride, arrive)); rest=depart-arrive; }
     else { rest=Number(row.rest)||0; depart=arrive+rest; }
     out.push({node:row.node, arrive, depart, rest, seg, mapMin, est, car, src, row,
       arriveLocked:!!row.arriveOverride, departLocked:!!row.departOverride, segLocked:row.segOverride!=null});
@@ -457,7 +462,7 @@ function render(){
        (P.resting?'<div class="line"><span class="k">目前</span><span class="v">'+P.at.node+'</span><span class="rem">休息中，預計 '+fmt(P.at.depart)+' 出發</span></div>'
                  :'<div class="line"><span class="k">目前</span><span class="v">'+P.at.node+' → '+nx.node+'</span><span class="rem">'+fmt(P.at.depart)+' 出發</span></div>')+
        '<div class="line"><span class="k">下一站</span><span class="v">'+nx.node+'</span><span class="t">預計 '+fmt(nx.arrive)+'</span><span class="rem">還有 '+durShort(nx.arrive-P.now)+'</span>'+
-         (nx.deadline!=null?'<span class="rem">保底 '+fmt(nx.deadline)+'</span>':'')+(nx.late?'<span class="warn">落後 '+durShort(nx.late.min)+'，請加速</span>':'')+'</div>'+
+         (nx.deadline!=null?'<span class="rem">保底 '+fmt(nx.deadline)+'</span>':'')+(nx.late?'<span class="warn">'+(nx.late.actual?'落後 ':'預計落後 ')+durShort(nx.late.min)+'，請加速</span>':'')+'</div>'+
        (nx!==last?'<div class="line"><span class="k">終點</span><span class="v">'+last.node+'</span><span class="t">預計 '+fmt(endT)+'</span><span class="rem">還有 '+durShort(endT-P.now)+'</span></div>':'');
   }
   $('status').innerHTML=st;
@@ -533,7 +538,7 @@ document.addEventListener('change', ev=>{
   if(el.id==='src'){ S.src=el.value; return render(); }
   if(el.id==='pace'){ S.pace=Math.max(50,Math.min(200,Number(el.value)||100)); return render(); }
   if(el.id==='start'){ S.start=el.value; return render(); }
-  if(el.id==='preset'){ const p=PRESETS[el.value]; if(!p) return; applyPreset(p); S.autoPreset=el.value; S.presetVersion=PRESET_VERSION; S.manualPreset=true; return render(); }
+  if(el.id==='preset'){ const p=PRESETS[el.value]; if(!p) return; applyPreset(p); S.autoPreset=el.value; S.presetVersion=PRESET_VERSION; S.manualPreset = !(el.value==='day1'||el.value==='day2'); return render(); }
   if(el.id==='guard'){ S.guard=Math.max(100,Math.min(300,Number(el.value)||130)); return render(); }
   if(el.id==='startDate'){ S.startDate=el.value||todayStr(); return render(); }
   if(el.dataset.k!=null){
@@ -576,7 +581,7 @@ function copyText(){
 }
 let toastT; function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
-const APP_VERSION='2026-10-15 v19';
+const APP_VERSION='2026-10-15 v20';
 try{ $('ver').textContent=APP_VERSION; }catch(e){}
 // 離線快取（只在 http(s) 下註冊；本機檔案與 Artifact 環境會略過）
 try{ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator.serviceWorker.register('./sw.js').catch(()=>{}); }catch(e){}
