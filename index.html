@@ -135,6 +135,14 @@ label.f{display:flex;flex-direction:column;gap:2px;font-size:.72rem;color:var(--
 .actions{display:flex;flex-direction:column;gap:10px}
 .action{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:center}
 .action span{font-size:.78rem;color:var(--muted);line-height:1.4}
+.settings summary{cursor:pointer;list-style:none;display:flex;align-items:baseline;gap:10px}
+.settings summary::-webkit-details-marker{display:none}
+.settings summary .h2{font-size:.72rem;font-weight:600;color:var(--muted);letter-spacing:.1em;display:inline-flex;align-items:center;gap:6px}
+.settings summary .h2::before{content:"";width:5px;height:5px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(-45deg);transition:transform .15s}
+.settings[open] summary .h2::before{transform:rotate(45deg)}
+.settings summary .sumnote{font-size:.72rem;color:var(--muted)}
+.settings[open] summary .sumnote{display:none}
+.settings-body{padding-top:16px}
 .help{margin-top:16px}
 .help summary{cursor:pointer;font-size:.78rem;color:var(--accent);letter-spacing:.04em;list-style:none;display:inline-flex;align-items:center;gap:6px}
 .help summary::-webkit-details-marker{display:none}
@@ -143,7 +151,7 @@ label.f{display:flex;flex-direction:column;gap:2px;font-size:.72rem;color:var(--
 .help p{margin:8px 0 0}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:999px;font-size:.85rem;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
-@media (prefers-reduced-motion:reduce){.toast,.help summary::before{transition:none}}
+@media (prefers-reduced-motion:reduce){.toast,.help summary::before,.settings summary .h2::before{transition:none}}
 </style>
 </head>
 <body>
@@ -153,23 +161,10 @@ label.f{display:flex;flex-direction:column;gap:2px;font-size:.72rem;color:var(--
     <p class="sub">雲天宮登山口起登。步程時間可選上河文化步程圖或山輕野行攻略。純離線，資料只存在這台裝置。</p>
   </header>
 
-  <section id="status" class="status"></section>
-
-  <section>
-    <h2>全程總覽</h2>
-    <div class="summary" id="summary"></div>
-  </section>
-
-  <section>
-    <h2>行程</h2>
-    <div class="legend"><span><i class="est"></i>推估</span><span><i class="cal"></i>手動校準</span><span><i class="auto"></i>已過，自動鎖定</span></div>
-    <div class="timeline" id="timeline"></div>
-  </section>
-
-  <section id="next"></section>
-
   <section id="settings">
-    <h2>設定</h2>
+    <details class="settings">
+      <summary><span class="h2">設定</span><span class="sumnote">預設行程、日期時間、推算方式、動作</span></summary>
+      <div class="settings-body">
     <div class="group">
       <h3>行程</h3>
       <label class="f full">載入預設行程
@@ -224,7 +219,25 @@ label.f{display:flex;flex-direction:column;gap:2px;font-size:.72rem;color:var(--
       <p class="hint">每站名稱旁的「最晚」是保底時間：出發後參考時間乘上保底係數。預計或實際到達晚於它，就會出現紅字「落後，加速」。</p>
       <p class="hint">時間已經過去的節點，開頁時會自動鎖住（灰色底線、標「已過」），改係數或來源都不會動到它們。</p>
     </details>
+      </div>
+    </details>
   </section>
+
+  <section id="status" class="status"></section>
+
+  <section>
+    <h2>全程總覽</h2>
+    <div class="summary" id="summary"></div>
+  </section>
+
+  <section>
+    <h2>行程</h2>
+    <div class="legend"><span><i class="est"></i>推估</span><span><i class="cal"></i>手動校準</span><span><i class="auto"></i>已過，自動鎖定</span></div>
+    <div class="timeline" id="timeline"></div>
+  </section>
+
+  <section id="next"></section>
+
 </div>
 <div class="toast" id="toast"></div>
 
