@@ -197,6 +197,7 @@ label.f{display:flex;flex-direction:column;gap:2px;font-size:.72rem;color:var(--
         <select id="src">
           <option value="sh">上河文化步程圖（偏快）</option>
           <option value="ll">山輕野行攻略（偏保守）</option>
+          <option value="jr">山友實走紀錄 2026-08（偏快）</option>
         </select>
         <span class="fnote">某段只有一種來源時自動用該來源</span>
       </label>
@@ -218,6 +219,7 @@ label.f{display:flex;flex-direction:column;gap:2px;font-size:.72rem;color:var(--
       <summary>使用說明</summary>
       <p class="hint">每一站有三個時間：<b>到達</b>、<b>休息</b>分鐘、<b>出發</b>。到達與出發預設是推估值；走到那一站時按「記錄現在」或直接改時間，後面所有節點會重新推算。改過的時間會變藍色並標「已校準」，按「還原推估」回到推估值。</p>
       <p class="hint">每站下方的「下一站」列出從這裡可以走去的地點和參考分鐘，點一下就接上。路段時間可以在「改為」欄自己填分鐘數。節點下方的灰色備註點一下可展開全文。</p>
+      <p class="hint">參考時間來源有三套：上河文化步程圖、山輕野行攻略（2025-07，高繞段偏保守）、山友實走紀錄（2026-08 獨攀，偏快，可當下限）。某段沒有所選來源時自動退回其他來源，路段旁會標來源名。</p>
       <p class="hint">每站名稱旁的「最晚」是保底時間：出發後參考時間乘上保底係數。預計或實際到達晚於它，就會出現紅字「落後，加速」。</p>
       <p class="hint">時間已經過去的節點，開頁時會自動鎖住（灰色底線、標「已過」），改係數或來源都不會動到它們。</p>
     </details>
@@ -249,7 +251,8 @@ label.f{display:flex;flex-direction:column;gap:2px;font-size:.72rem;color:var(--
 'use strict';
 // ---------- 路網資料 ----------
 // 來源：sh＝上河文化 G11 步程圖、tm＝隊伍資料（雲天宮段）、ll＝山輕野行 2025-07 奇萊南華攻略建議時間表
-const SRC = {sh:'上河', tm:'隊伍', ll:'山輕野行'};
+// jr＝山友實走紀錄（jinra 痞客邦 2026-08，獨攀、腳程快；第二天雨中下山），由各 K 數時刻換算、取整 5 分
+const SRC = {sh:'上河', tm:'隊伍', ll:'山輕野行', jr:'山友實走'};
 const NODES = {
   '屯原登山口停車場':{note:'停車、出發；到雲天宮登山口 3.2K 林道，可請馬蘭民宿接駁'},
   '雲天宮登山口':{pole:0,note:'新高繞線起點：1.5K 陡上近 400m 到尾上山，再下切接回古道 2.8K'},
@@ -284,15 +287,25 @@ const WALK = [
   ['天池山莊','奇萊主山南峰',120,null,'ll'],
   ['奇萊主山南峰','天池岔路口',70,null,'ll'],
   ['天池岔路口','南華山',40,30,'sh'],
-  ['天池岔路口','南華山',50,30,'ll']
+  ['天池岔路口','南華山',50,30,'ll'],
+  ['雲天宮登山口','尾上山2532峰',50,45,'jr'],
+  ['尾上山2532峰','古道2.8K',35,55,'jr'],
+  ['古道2.8K','雲海保線所',35,30,'jr'],
+  ['雲海保線所','5.5K崩壁',25,25,'jr'],
+  ['5.5K崩壁','10K崩壁',105,65,'jr'],
+  ['10K崩壁','12.7K三疊瀑布',60,50,'jr'],
+  ['12.7K三疊瀑布','天池山莊',10,10,'jr'],
+  ['天池山莊','天池岔路口',40,25,'jr'],
+  ['天池岔路口','南峰登山口',15,10,'jr'],
+  ['南峰登山口','奇萊主山南峰',70,35,'jr']
 ];
 const CAR = [];
 const ADJ = {};
 function addEdge(a,b,m,car,src){ if(m==null) return; (ADJ[a] = ADJ[a]||[]).push({to:b,min:m,car,src}); }
 WALK.forEach(([a,b,ab,ba,src])=>{ addEdge(a,b,ab,false,src); addEdge(b,a,ba,false,src); });
 CAR.forEach(([a,b,ab,ba])=>{ addEdge(a,b,ab,true,'sh'); addEdge(b,a,ba,true,'sh'); });
-// 依「參考時間來源」偏好挑邊：上河優先 sh>tm>ll；山輕野行優先 ll>sh>tm
-function srcOrder(){ return (S && S.src==='ll') ? ['ll','sh','tm'] : ['sh','tm','ll']; }
+// 依「參考時間來源」偏好挑邊；某段沒有該來源時依序退回其他來源
+function srcOrder(){ const p=S&&S.src; return p==='ll' ? ['ll','sh','tm','jr'] : p==='jr' ? ['jr','sh','tm','ll'] : ['sh','tm','ll','jr']; }
 function pick(list){ const o=srcOrder(); return list.slice().sort((x,y)=>o.indexOf(x.src)-o.indexOf(y.src))[0]||null; }
 function edge(a,b){ return pick((ADJ[a]||[]).filter(e=>e.to===b)); }
 function nextOptions(a){ const seen={}; (ADJ[a]||[]).forEach(e=>{ (seen[e.to]=seen[e.to]||[]).push(e); }); return Object.keys(seen).map(k=>pick(seen[k])); }
@@ -569,7 +582,7 @@ document.addEventListener('submit', ev=>{
 });
 function copyText(){
   const C=compute(); const DL=computeDeadlines(); C.forEach((c,i)=>{ if(i>0) c.deadline=DL[i]; }); const day0=dayOf(C[0].depart);
-  const lines=['能高越嶺行程（腳程 '+S.pace+'%，時間來源 '+(S.src==='ll'?'山輕野行':'上河')+'）'];
+  const lines=['能高越嶺行程（腳程 '+S.pace+'%，時間來源 '+(SRC[S.src]||'上河')+'）'];
   C.forEach((c,i)=>{ const d=dayOf(c.arrive==null?c.depart:c.arrive)-day0; const dt=d>0?'D'+(d+1)+' ':'';
     if(i===0) lines.push(dt+c.node+'  出發 '+fmt(c.depart));
     else lines.push(dt+c.node+'  到 '+fmt(c.arrive)+(c.deadline!=null?'(最晚'+fmt(c.deadline)+')':'')+((c.arriveLocked&&!c.row.autoArr)?'*':'')+(c.rest?'  休 '+c.rest+'分':'')+'  發 '+fmt(c.depart)+((c.departLocked&&!c.row.autoDep)?'*':'')+'  （'+(c.car?'車 ':'')+(c.seg==null?'?':c.seg)+'分）'); });
@@ -581,7 +594,7 @@ function copyText(){
 }
 let toastT; function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
-const APP_VERSION='2026-10-15 v21';
+const APP_VERSION='2026-10-15 v22';
 try{ $('ver').textContent=APP_VERSION; }catch(e){}
 // 離線快取（只在 http(s) 下註冊；本機檔案與 Artifact 環境會略過）
 try{ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator.serviceWorker.register('./sw.js').catch(()=>{}); }catch(e){}
