@@ -159,6 +159,7 @@ label.f{display:flex;flex-direction:column;gap:2px;font-size:.72rem;color:var(--
   <header>
     <h1>能高越嶺時間計算機</h1>
     <p class="sub">雲天宮登山口起登。步程時間可選上河文化步程圖或山輕野行攻略。純離線，資料只存在這台裝置。</p>
+    <p class="sub">版本 <span id="ver"></span></p>
   </header>
 
   <section id="settings">
@@ -563,6 +564,8 @@ function copyText(){
 }
 let toastT; function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
+const APP_VERSION='2026-10-15 v18';
+try{ $('ver').textContent=APP_VERSION; }catch(e){}
 // 離線快取（只在 http(s) 下註冊；本機檔案與 Artifact 環境會略過）
 try{ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator.serviceWorker.register('./sw.js').catch(()=>{}); }catch(e){}
 if(!S.startDate) S.startDate=todayStr();
